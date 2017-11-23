@@ -26,8 +26,11 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"net/smtp"
 	"os"
 	"path"
+	"strings"
+	"time"
 
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
@@ -82,7 +85,7 @@ const msgFmt = "MIME-Version: 1.0\r\n" +
 	"--f403043895ccc776c6055e8fae42--\r\n"
 
 func sendToKindle(cmd *cobra.Command, args []string) {
-	to := []string{fmt.Sprintf("%s@kindle.com", args[0])}
+	to := args[0]
 	f := args[1]
 	c, err := ioutil.ReadFile(f)
 	if err != nil {
@@ -90,14 +93,27 @@ func sendToKindle(cmd *cobra.Command, args []string) {
 	}
 	s := base64.StdEncoding.EncodeToString(c)
 	b := path.Base(f)
-	_ = []byte(fmt.Sprintf(msgFmt, to, b, b, s))
-	mxs, err := net.LookupMX("kindle.com")
+	m := []byte(fmt.Sprintf(msgFmt, to, b, b, s))
+	at := strings.LastIndex(to, "@")
+	if at < 0 {
+		log.Fatalf("address must contain @: %s", to)
+	}
+	mxs, err := net.LookupMX(to[at+1:])
 	if err != nil {
 		log.Fatal(err)
 	}
 	mx := fmt.Sprintf("%s:25", mxs[0].Host)
-	fmt.Printf("smtp.SendMail(%s, nil, %s, %s, m)\n", mx, "haynes@edgeplay.org", to)
-	// err = smtp.SendMail(mx, nil, "haynes@edgelay.org", to, m)
+	// fmt.Printf("smtp.SendMail(%s, nil, %s, %s, m)\n", mx, "haynes@edgeplay.org", []string{to})
+	// fmt.Printf("msg:\n%s\n", m)
+	conn, err := net.DialTimeout("tcp4", mx, 10*time.Second)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = conn.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = smtp.SendMail(mx, nil, "haynes@edgelay.org", []string{to}, m)
 	if err != nil {
 		log.Fatal(err)
 	}
