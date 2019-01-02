@@ -23,6 +23,7 @@ package cmd
 import (
 	"encoding/base64"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -103,17 +104,40 @@ func sendToKindle(cmd *cobra.Command, args []string) {
 		log.Fatal(err)
 	}
 	mx := fmt.Sprintf("%s:25", mxs[0].Host)
-	// fmt.Printf("smtp.SendMail(%s, nil, %s, %s, m)\n", mx, "haynes@edgeplay.org", []string{to})
-	// fmt.Printf("msg:\n%s\n", m)
 	conn, err := net.DialTimeout("tcp4", mx, 10*time.Second)
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = conn.Close()
+	defer func() { _ = conn.Close() }()
+	client, err := smtp.NewClient(conn, "ceh.bz")
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = smtp.SendMail(mx, nil, "haynes@edgelay.org", []string{to}, m)
+	client.Mail("ceh@ceh.bz")
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = client.Rcpt(to)
+	if err != nil {
+		log.Fatal(err)
+	}
+	body, err := client.Data()
+	if err != nil {
+		log.Fatal(err)
+	}
+	n, err := body.Write(m)
+	if err == nil && n < len(m) {
+		err = io.ErrShortWrite
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = body.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = client.Quit()
+	// err = smtp.SendMail(mx, nil, "haynes@edgelay.org", []string{to}, m)
 	if err != nil {
 		log.Fatal(err)
 	}
